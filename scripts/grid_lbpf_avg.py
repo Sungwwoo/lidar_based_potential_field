@@ -86,8 +86,40 @@ def cbScan(scan):
     pmap, minx, miny = CalcPotentialField(g_transx, g_transy, ox, oy, resolution, r_transx, r_transy)
     data = np.array(pmap).T
 
+    # Find Local Path
+    previous_ids = deque()
+    px, py = [], []
+    minp = float("inf")
+    minix, miniy = -1, -1
+    ix, iy = window_size / 8 / resolution, window_size / 2 / resolution
+    px.append(ix)
+    py.append(iy)
+    inx, iny = ix, iy
+
+    while True:
+        for i, _ in enumerate(motion):
+            inx = int(ix + motion[i][0])
+            iny = int(iy + motion[i][1])
+            if inx >= len(pmap) or iny >= len(pmap[0]) or inx < 0 or iny < 0:
+                p = float("inf")  # outside area
+                break
+            else:
+                p = pmap[inx][iny]
+            if minp > p:
+                minp = p
+                minix = inx
+                miniy = iny
+        ix = minix
+        iy = miniy
+        px.append(ix)
+        py.append(iy)
+
+        if oscillations_detection(previous_ids, ix, iy):
+            break
+
     plt.figure(figsize=(8, 7))
     plt.pcolor(data, vmax=100.0, cmap=plt.cm.Blues)
+    plt.plot(px, py, "r")
     plt.grid(True)
     plt.savefig("test.png")
     plt.close()
@@ -127,8 +159,8 @@ def CalcPotentialField(gx, gy, ox, oy, reso, rx, ry):
         for iy in range(yw):
             y = iy * reso + miny
             ug = CalcAttractivePotential(x, y, gx, gy)
-            uo = CalcRepulsivePotential(x, y, ox, oy, window_size / 2)
-            uf = ug + uo
+            uo, uo_avg = CalcRepulsivePotential(x, y, ox, oy, window_size / 2)
+            uf = ug + uo_avg
             pmap[ix][iy] = uf
 
     return pmap, minx, miny
@@ -142,39 +174,27 @@ def CalcAttractivePotential(x, y, gx, gy):
 def CalcRepulsivePotential(x, y, ox, oy, rr):
     # search nearest obstacle
     minid = -1
+    sum = 0
     dmin = float("inf")
     for i, _ in enumerate(ox):
         d = np.hypot(x - ox[i], y - oy[i])
         if dmin >= d:
             dmin = d
             minid = i
+        if d <= 0.1:
+            d = 0.1
+        sum += 0.5 * ETA * (1.0 / d - 1.0 / rr)
 
     # calc repulsive potential
     dq = np.hypot(x - ox[minid], y - oy[minid])
     if dq <= 0.1:
         dq = 0.1
 
-    return 0.5 * ETA * (1.0 / dq - 1.0 / rr) ** 2
-
-
-def CalcAttractiveForce(x, y, gx, gy):
-    p_x = KP * (x - gx)
-    p_y = KP * (y - gy)
-    return (p_x, p_y)
-
-
-def CalcRepulsiveForce(x, y, ox, oy, rho_o):
-    sum_ox, sum_oy = 0, 0
-    for i in range(0, len(ox)):
-        sum_ox += ox[i]
-        sum_oy += oy[i]
-    f_x = -ETA * (1 / (x - ox) - 1 / rho_o) / (x - ox) ** 2
-    f_y = -ETA * (1 / (y - oy) - 1 / rho_o) / (y - oy) ** 2
-    return (f_x, f_y)
+    return 0.5 * ETA * (1.0 / dq - 1.0 / rr) ** 2, sum / len(ox)
 
 
 if __name__ == "__main__":
-    rospy.init_node("lidar_base_potential_field")
+    rospy.init_node("lidar_base_potential_field", disable_signals=True)
 
     # tf listner
     tfBuffer = tf2_ros.Buffer()
@@ -191,12 +211,11 @@ if __name__ == "__main__":
     robot_r = rospy.get_param("robot_radius", 5.0)
     goal_tolerance = rospy.get_param("xy_goal_tolerance", 0.2)
     OSCILLATIONS_DETECTION_LENGTH = rospy.get_param("oscillation_detection_length", 3)
-
     # Subscriber
     sub_scan = rospy.Subscriber("scan", LaserScan, cbScan, queue_size=2)
 
-    # Publisher
-    pub_cmd = rospy.Publisher("cmd_vel", Twist, queue_size=10)
+    # Motions for path planning
+    motion = [[1, 0], [0, 1], [-1, 0], [0, -1], [-1, -1], [-1, 1], [1, -1], [1, 1]]
 
     try:
         while not rospy.is_shutdown():
