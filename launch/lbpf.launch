@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<launch>
+    
+    <!-- Load Params -->
+    <rosparam command="load" file="$(find lidar_based_potential_field)/config/params.yaml" />
+    
+    <!-- Launch Nodes -->
+    <node name="goal_tf_publisher" pkg="lidar_based_potential_field" type="pub_goal_tf.py" output="screen"/>
+    <node name="lbpf" pkg="lidar_based_potential_field" type="clustered_pf.py" output="screen"/>
+
+</launch>

@@ -35,15 +35,15 @@ if __name__ == "__main__":
     goal_trans = Vector3()
     goal_rot = Quaternion()
     br = TransformBroadcaster()
-    sub_base_goal = rospy.Subscriber("/move_base/current_goal", PoseStamped, cbMoveBaseGoal, queue_size=2)
+    sub_base_goal = rospy.Subscriber("/move_base_simple/goal", PoseStamped, cbMoveBaseGoal, queue_size=2)
 
     while not rospy.is_shutdown():
         if sendTransform:
             trans = Transform(translation=goal_trans, rotation=goal_rot)
             header = Header()
             header.stamp = rospy.Time.now()
-            header.frame_id = "map"
+            header.frame_id = "odom"
             trans_stamped = TransformStamped(header, "goal", trans)
             br.sendTransformMessage(trans_stamped)
             # For testing potential calculation
-            rospy.sleep(1)
+            rospy.sleep(0.01)

@@ -1,0 +1,18 @@
+# Potential Field Method Gains
+attractive_potential_gain: 10.0
+repulsive_potential_gain: 200.0
+
+# Lidar Data Informations
+lidar_distnace_max: 10.0          # meters
+lidar_distance_min: 0.5           # meters
+lidar_angle_max: 1.57619449019    # radian
+lidar_angle_min: -1.57619449019   # radian
+lidar_data_length: 716
+
+# Lidar Clustering Parameters
+n_distance_segment: 4
+clustering_threshold: 10          # meters
+merging_threshold: 0.4            # meters
+
+# Goal Parameters
+xy_goal_tolerance: 0.2
