@@ -42,7 +42,7 @@ class BasicAPF:
             self.ld_data_len = len(scan.ranges)
             self.ld_angle_step = scan.angle_increment
             self.ld_link_name = scan.header.frame_id
-            rospy.loginfo("Successfully exctracted informations from scan topic")
+            rospy.loginfo("Successfully extracted informations from scan topic")
 
         except:
             rospy.logwarn("Cannot import configurations automatically. Using manual configurations...")
