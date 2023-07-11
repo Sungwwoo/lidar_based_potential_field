@@ -162,10 +162,7 @@ include_directories(
 # # Mark executable scripts (Python etc.) for installation
 # # in contrast to setup.py, you can choose the destination
 catkin_install_python(PROGRAMS
-  scripts/clustered_average_pf.py
-  scripts/clustered_shortest_pf.py
-  scripts/basic_pf.py
-  scripts/denoised_pf.py
+  scripts/main.py
   scripts/pub_goal_tf.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
