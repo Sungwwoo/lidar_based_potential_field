@@ -167,7 +167,6 @@ catkin_install_python(PROGRAMS
   scripts/basic_pf.py
   scripts/denoised_pf.py
   scripts/pub_goal_tf.py
-  scripts/jackal_apf.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

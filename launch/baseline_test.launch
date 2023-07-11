@@ -6,6 +6,7 @@
     
     <!-- Launch Nodes -->
     <node name="goal_tf_publisher" pkg="lidar_based_potential_field" type="pub_goal_tf.py" output="screen"/>
-    <node name="lbpf" pkg="lidar_based_potential_field" type="clustered_pf.py" output="screen"/>
+    <node name="lbpf" pkg="lidar_based_potential_field" type="main.py" output="screen"/>
+    <node name="rviz_pf" pkg="rviz" type="rviz" respawn="false" args="-d $(find lidar_based_potential_field)/config/rviz.rviz" output="screen"/>
 
 </launch>

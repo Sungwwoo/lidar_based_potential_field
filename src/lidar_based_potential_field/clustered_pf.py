@@ -12,12 +12,21 @@ from lidar_based_potential_field.ros_utils import Point2D, Obstacle
 
 
 class ClusteredAPF:
-    def __init__(self):
-        # rospy.init_node("lidar_base_potential_field", disable_signals=True)
-
-        # tf listner
-        self.tfBuffer = tf2_ros.Buffer()
+    def __init__(self, buffer=None):
+        # tf buffer
+        if buffer is None:
+            self.tfBuffer = tf2_ros.Buffer()
+        else:
+            self.tfBuffer = buffer
+            rospy.loginfo("Got tf buffer instance")
         self.tfListner = tf2_ros.TransformListener(self.tfBuffer)
+
+        # Get node namespace
+        ns = rospy.get_namespace()
+        if len(ns) < 1:
+            self.ns=""
+        else:
+            self.ns = ns[1 : len(ns)]
 
         # Get Params
         self.KP = rospy.get_param("attractive_potential_gain", 5.0)
@@ -35,7 +44,7 @@ class ClusteredAPF:
             self.ld_angle_step = scan.angle_increment
             self.ld_link_name = scan.header.frame_id
         except:
-            rospy.logwarn("Cannot import configurations automatically. Using manual configurations...")
+            rospy.WARN("Cannot import configurations automatically. Using manual configurations...")
             self.ld_dist_max = rospy.get_param("lidar_distance_max", 10.0)
             self.ld_dist_min = rospy.get_param("lidar_distance_min", 0.5)
             self.ld_angle_max = rospy.get_param("lidar_angle_max", 1.57619449019)
@@ -76,7 +85,7 @@ class ClusteredAPF:
 
         # Publisher
         self.pub_cmd = rospy.Publisher("cmd_vel", Twist, queue_size=10)
-        self.pub_markers = rospy.Publisher("markers", MarkerArray, queue_size=10)
+        self.pub_markers = rospy.Publisher("potential_markers", MarkerArray, queue_size=10)
 
         self.delete_marker = MarkerArray()
         marker = Marker()
@@ -84,7 +93,20 @@ class ClusteredAPF:
         marker.action = Marker.DELETEALL
         self.delete_marker.markers.append(marker)
         self.pub_markers.publish(self.delete_marker)
+
+        self.u_total = [0.0, 0.0]
+        self.u = 0.0
+
+        self.is_running = False
         return
+
+    def run(self):
+        rospy.loginfo("Enabling APF")
+        self.is_running = True
+
+    def stop(self):
+        rospy.loginfo("Disabling APF")
+        self.is_running = False
 
     def GetRobotPose(self):
         """Return the current location of robot.
@@ -94,7 +116,7 @@ class ClusteredAPF:
             [Orientation_x, Orientation_y, Orientation_z, Orientation_z]
             based on odom frame
         """
-        loc = ros_utils.GetTF(self.tfBuffer, "odom", "base_link")
+        loc = ros_utils.GetTF(self.tfBuffer, self.ns + "odom", self.ns + "base_link")
         robotLocation = [loc.transform.translation.x, loc.transform.translation.y]
         robotOrientation = [
             loc.transform.rotation.x,
@@ -105,7 +127,7 @@ class ClusteredAPF:
         return robotLocation, robotOrientation
 
     def GetGoalPose(self):
-        loc = ros_utils.GetTF(self.tfBuffer, self.ld_link_name, "goal")
+        loc = ros_utils.GetTF(self.tfBuffer, self.ld_link_name, self.ns + "goal")
         goalLocation = [loc.transform.translation.x, loc.transform.translation.y]
         goalOrientation = [
             loc.transform.rotation.x,
@@ -363,9 +385,26 @@ class ClusteredAPF:
 
         return
 
-    def set_weights(self, KP, ETA):
+    def set_params(self, KP, ETA):
         self.ETA = ETA
         self.KP = KP
+
+    def get_weights(self):
+        """Get positive, repulsive potential weights
+
+        Returns:
+            (positive_potential_weight, repulsive_potential_weight)
+        """
+        return [self.KP, self.ETA]
+
+    def get_forces(self):
+        """Get latest total force
+
+        Return:
+            (f_x, f_y, |f|)
+        """
+        return [self.u_total[0], self.u_total[1], self.u]
+
 
     def cbScan(self, scan: LaserScan):
         obs_raw = scan.ranges[:]
