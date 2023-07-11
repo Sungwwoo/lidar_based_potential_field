@@ -1,1 +1,7 @@
-/src/lidar_based_potential_field/clustered_pf.py
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+
+src/lidar_based_potential_field/clustered_pf.py
