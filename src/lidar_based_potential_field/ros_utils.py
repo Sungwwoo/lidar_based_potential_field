@@ -66,9 +66,12 @@ def calcDistance(a: list, b: list):
 
 
 def GetTF(tf_buffer, target_frame: str, source_frame: str):
+    count = 0
     while True:
         try:
-            trans = tf_buffer.lookup_transform(target_frame, source_frame, time=rospy.Time(0))
+            trans = tf_buffer.lookup_transform(
+                target_frame, source_frame, rospy.Time.now(), rospy.Duration(0.1)
+            )
 
             return trans
         except (
@@ -77,6 +80,10 @@ def GetTF(tf_buffer, target_frame: str, source_frame: str):
             tf2_ros.ExtrapolationException,
         ):
             rospy.sleep(0.01)
+            count = count + 1
+            if count > 100:
+                rospy.signal_shutdown("TF tree broken")
+                raise rospy.exceptions.ROSInterruptException("ROS shutdown request")
             continue
 
 
