@@ -3,5 +3,3 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-
-src/lidar_based_potential_field/clustered_pf.py
