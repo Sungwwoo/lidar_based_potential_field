@@ -61,7 +61,7 @@ class BasicAPF:
         self.thresh_cluster = rospy.get_param("clustering_threshold", 2)
         self.thresh_merge = rospy.get_param("merging_threshold", 0.5)
 
-        self.pf_distance = rospy.get_param("potential_field_distance")
+        self.pf_distance = rospy.get_param("potential_field_distance", 15.0)
 
         # Robot dynamics parameters
         self.acc_x_lim = rospy.get_param("acc_x_lim", 2.5)
@@ -243,10 +243,12 @@ class BasicAPF:
 
     def CalcAttractiveForce(self, gx, gy):
         d = np.hypot(gx, gy)
+        ratio = 1.0
         if d < self.att_rho_o:
+            ratio = d / self.att_rho_o
             d = self.att_rho_o
-        p_x = self.KP * gx
-        p_y = self.KP * gy
+        p_x = self.KP * gx / ratio
+        p_y = self.KP * gy / ratio
         return [p_x, p_y], self.KP * d
 
     def CalcRepulsiveForce(self, o, dist_max):
@@ -302,18 +304,18 @@ class BasicAPF:
                 twist.angular.z = self.vel_theta_max
 
         # target_lin = self.vel_x_max * ((1 - 1 / abs(u)) - self.linear_kp * abs(target_ang) / self.vel_theta_max)
-        # target_lin = self.linear_kp * u_total[0]
-        angular_ratio = 1.0 * abs(current_orientation) / (2 * np.pi)
-        if angular_ratio > 0.8:
-            angular_ratio = 0.8
-        target_lin = min(self.vel_x_max * (1 - angular_ratio), self.vel_x_max * ((1 - 1 / abs(u))))
+        target_lin = self.linear_kp * self.f_att[0]
+        # angular_ratio = 1.0 * abs(current_orientation) / (2 * np.pi)
+        # if angular_ratio > 0.8:
+        #     angular_ratio = 0.8
+        # target_lin = min(self.vel_x_max * (1 - angular_ratio), self.vel_x_max * ((1 - 1 / abs(u))))
 
         twist.linear.x = target_lin
 
         # Clip Velocity
-        if abs(twist.linear.x) < self.vel_x_min:
+        if twist.linear.x < self.vel_x_min:
             twist.linear.x = self.vel_x_min
-        elif abs(twist.linear.x) > self.vel_x_max:
+        elif twist.linear.x > self.vel_x_max:
             twist.linear.x = self.vel_x_max
 
         # Save current velocities
