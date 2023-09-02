@@ -65,13 +65,11 @@ def calcDistance(a: list, b: list):
     return np.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2)
 
 
-def GetTF(tf_buffer, target_frame: str, source_frame: str):
+def GetTF(tf_buffer, target_frame: str, source_frame: str, shutdown=False):
     count = 0
     while True:
         try:
-            trans = tf_buffer.lookup_transform(
-                target_frame, source_frame, rospy.Time.now(), rospy.Duration(0.1)
-            )
+            trans = tf_buffer.lookup_transform(target_frame, source_frame, rospy.Time.now(), rospy.Duration(0.1))
 
             return trans
         except (
@@ -81,9 +79,9 @@ def GetTF(tf_buffer, target_frame: str, source_frame: str):
         ):
             rospy.sleep(0.01)
             count = count + 1
-            if count > 100:
+            if count > 100 and shutdown:
+                rospy.sleep(0.01)
                 rospy.signal_shutdown("TF tree broken")
-                raise rospy.exceptions.ROSInterruptException("ROS shutdown request")
             continue
 
 
