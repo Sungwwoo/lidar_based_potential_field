@@ -1,4 +1,4 @@
-# 1#! /usr/bin/env python3
+#! /usr/bin/env python3
 
 import rospy
 from geometry_msgs.msg import Pose, PoseStamped, Transform, TransformStamped, Vector3, Quaternion
@@ -31,6 +31,10 @@ def cbMoveBaseGoal(goal):
 if __name__ == "__main__":
     rospy.init_node("goal_tf_constructor", disable_signals=True)
 
+    ns = rospy.get_namespace()
+    ns = ns[1 : len(ns)]
+    rospy.loginfo("Using namespace /" + ns + " for tf publisher")
+
     sendTransform = False
     goal_trans = Vector3()
     goal_rot = Quaternion()
@@ -42,8 +46,9 @@ if __name__ == "__main__":
             trans = Transform(translation=goal_trans, rotation=goal_rot)
             header = Header()
             header.stamp = rospy.Time.now()
-            header.frame_id = "odom"
-            trans_stamped = TransformStamped(header, "goal", trans)
+            header.frame_id = ns + "odom"
+            # header.frame_id = "map"
+            trans_stamped = TransformStamped(header, ns + "goal", trans)
             br.sendTransformMessage(trans_stamped)
-            # For testing potential calculation
+
             rospy.sleep(0.01)

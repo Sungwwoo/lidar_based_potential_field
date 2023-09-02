@@ -1,12 +1,14 @@
 <?xml version="1.0"?>
 <launch>
-    
-    <!-- Load Params -->
-    <rosparam command="load" file="$(find lidar_based_potential_field)/config/params.yaml" />
-    
-    <!-- Launch Nodes -->
-    <node name="goal_tf_publisher" pkg="lidar_based_potential_field" type="pub_goal_tf.py" output="screen"/>
-    <node name="lbpf" pkg="lidar_based_potential_field" type="main.py" output="screen"/>
-    <node name="rviz_pf" pkg="rviz" type="rviz" respawn="false" args="-d $(find lidar_based_potential_field)/config/rviz.rviz" output="screen"/>
+    <group ns="JK_01">
 
+        <!-- Load Params -->
+        <rosparam command="load" file="$(find apf_robot_server)/config/jackal_params.yaml" />
+        <!-- Launch Nodes -->
+        <node name="goal_tf_publisher" pkg="lidar_based_potential_field" type="pub_goal_tf.py"
+            output="screen" />
+        <node name="lbpf" pkg="lidar_based_potential_field" type="main.py" output="screen" />
+        <node name="rviz_pf" pkg="rviz" type="rviz" respawn="false"
+            args="-d $(find lidar_based_potential_field)/config/rviz.rviz" output="screen" />
+    </group>
 </launch>
