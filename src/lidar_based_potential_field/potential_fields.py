@@ -35,6 +35,7 @@ class BasicAPF:
         self.ETA = rospy.get_param("repulsive_potential_gain", 200.0)
 
         self.att_rho_o = rospy.get_param("attractive_rho_o", 1.0)
+
         # Lidar Configuration
         try:
             # Automatically importing lidar configurations
@@ -47,13 +48,17 @@ class BasicAPF:
             self.ld_angle_step = scan.angle_increment
             self.ld_link_name = scan.header.frame_id
         except:
-            rospy.WARN("Cannot import configurations automatically. Using manual configurations...")
+            rospy.WARN(
+                "Cannot import configurations automatically. Using manual configurations..."
+            )
             self.ld_dist_max = rospy.get_param("lidar_distance_max", 10.0)
             self.ld_dist_min = rospy.get_param("lidar_distance_min", 0.5)
             self.ld_angle_max = rospy.get_param("lidar_angle_max", 1.57619449019)
             self.ld_angle_min = rospy.get_param("lidar_angle_min", -1.57619449019)
             self.ld_data_len = rospy.get_param("lidar_data_length", 716)
-            self.ld_angle_step = (self.ld_angle_max - self.ld_angle_min) / float(self.ld_data_len)
+            self.ld_angle_step = (self.ld_angle_max - self.ld_angle_min) / float(
+                self.ld_data_len
+            )
             self.ld_link_name = rospy.get_param("lidar_link_name", "front_laser_link")
 
         # Clustering Parameters
@@ -92,7 +97,9 @@ class BasicAPF:
 
         # Publisher
         self.pub_cmd = rospy.Publisher("cmd_vel", Twist, queue_size=10)
-        self.pub_markers = rospy.Publisher("potential_markers", MarkerArray, queue_size=10)
+        self.pub_markers = rospy.Publisher(
+            "potential_markers", MarkerArray, queue_size=10
+        )
 
         self.delete_marker = MarkerArray()
         marker = Marker()
@@ -107,6 +114,7 @@ class BasicAPF:
         self.att = 0.0
         self.f_rep = [0.0, 0.0]
         self.rep = 0.0
+        self.att_offset = 0.0
 
         # For additional initialization of inherited classes
         self.initialize()
@@ -133,7 +141,9 @@ class BasicAPF:
             [Orientation_x, Orientation_y, Orientation_z, Orientation_z]
             based on odom frame
         """
-        loc = ros_utils.GetTF(self.tfBuffer, self.ns + "odom", self.ns + "base_link", True)
+        loc = ros_utils.GetTF(
+            self.tfBuffer, self.ns + "odom", self.ns + "base_link", True
+        )
         robotLocation = [loc.transform.translation.x, loc.transform.translation.y]
         robotOrientation = [
             loc.transform.rotation.x,
@@ -199,7 +209,9 @@ class BasicAPF:
             marker.scale.x = 0.1 * self.rep
             marker.scale.y, marker.scale.z = 0.03, 0.03
             marker.pose.position = Point(0, 0, 0)
-            marker.pose.orientation = ros_utils.calcOrientation([0, 0, 0], [self.f_rep[0], self.f_rep[1], 0])
+            marker.pose.orientation = ros_utils.calcOrientation(
+                [0, 0, 0], [self.f_rep[0], self.f_rep[1], 0]
+            )
             marker.color.r, marker.color.g, marker.color.b = 0, 0, 1
             marker.color.a = 0.7
             markerArray.markers.append(marker)
@@ -218,7 +230,9 @@ class BasicAPF:
         marker.scale.x = 0.1 * u
         marker.scale.y, marker.scale.z = 0.03, 0.03
         marker.pose.position = Point(0, 0, 0)
-        marker.pose.orientation = ros_utils.calcOrientation([0, 0, 0], [u_total[0], u_total[1], 0])
+        marker.pose.orientation = ros_utils.calcOrientation(
+            [0, 0, 0], [u_total[0], u_total[1], 0]
+        )
         marker.color.r, marker.color.g, marker.color.b = 0, 1, 0
         marker.color.a = 0.7
         markerArray.markers.append(marker)
@@ -247,9 +261,9 @@ class BasicAPF:
         if d < self.att_rho_o:
             ratio = d / self.att_rho_o
             d = self.att_rho_o
-        p_x = self.KP * gx / ratio
+        p_x = self.KP * gx / ratio + self.att_offset
         p_y = self.KP * gy / ratio
-        return [p_x, p_y], self.KP * d
+        return [p_x, p_y], self.KP * np.hypot(p_x, p_y)
 
     def CalcRepulsiveForce(self, o, dist_max):
         [ox, oy] = o.rect
@@ -266,7 +280,9 @@ class BasicAPF:
         twist.linear.y, twist.linear.z = 0, 0
         twist.angular.x, twist.angular.y = 0, 0
 
-        current_orientation = ros_utils.calcOrientation([0, 0, 0], [u_total[0], u_total[1], 0], ret_deg=True)
+        current_orientation = ros_utils.calcOrientation(
+            [0, 0, 0], [u_total[0], u_total[1], 0], ret_deg=True
+        )
 
         # TODO
         if ros_utils.calcDistance([0, 0], u_total) < self.xy_goal_tol:
@@ -282,9 +298,9 @@ class BasicAPF:
             self.pub_cmd.publish(twist)
             return
 
-        target_ang = self.vel_theta_max * self.angular_kp * current_orientation / (2 * np.pi) - self.angular_kd * (
-            self.prev_orientation - current_orientation
-        )
+        target_ang = self.vel_theta_max * self.angular_kp * current_orientation / (
+            2 * np.pi
+        ) - self.angular_kd * (self.prev_orientation - current_orientation)
 
         self.prev_orientation = current_orientation
 
@@ -395,6 +411,9 @@ class BasicAPF:
         ret.extend(self.get_total_force())
         return ret
 
+    def set_att_offset(self, offset):
+        self.att_offset = offset
+
     def cbScan(self, scan: LaserScan):
         # Calculate potentals only if the robot server requires
         if not self.is_running:
@@ -409,7 +428,9 @@ class BasicAPF:
 
         # [r_transx, r_transy], [r_rotx, r_roty, r_rotz, r_rotw] = GetRobotPose()
         [g_transx, g_transy], goal_orientation = self.GetGoalPose()
-        self.f_total, self.total = self.CalcPotentialField(g_transx, g_transy, min_dist_obstacle, self.ld_dist_max)
+        self.f_total, self.total = self.CalcPotentialField(
+            g_transx, g_transy, min_dist_obstacle, self.ld_dist_max
+        )
 
         self.CalcVelocity(
             self.f_total,
@@ -437,7 +458,10 @@ class ClusteredAPF(BasicAPF):
             if self.ld_dist_min <= dist < self.ld_dist_max:
                 point = Point2D()
                 point.Set_RTheta(dist, self.ld_angle_min + self.ld_angle_step * i)
-                seg = int((dist - self.ld_dist_min) // ((self.ld_dist_max - self.ld_dist_min) / self.n_dist_segment))
+                seg = int(
+                    (dist - self.ld_dist_min)
+                    // ((self.ld_dist_max - self.ld_dist_min) / self.n_dist_segment)
+                )
                 segmented_points[seg].append(point)
 
         return segmented_points
@@ -451,7 +475,10 @@ class ClusteredAPF(BasicAPF):
                 break
             for j in range(1, len(segment)):
                 temp.append(segment[j - 1])
-                if abs(segment[j].Get_Theta() - segment[j - 1].Get_Theta()) > self.thresh_cluster * self.ld_angle_step:
+                if (
+                    abs(segment[j].Get_Theta() - segment[j - 1].Get_Theta())
+                    > self.thresh_cluster * self.ld_angle_step
+                ):
                     unmerged[i].append(temp)
                     temp = []
                 else:
@@ -475,7 +502,10 @@ class ClusteredAPF(BasicAPF):
                         sp2 = block[k][0]
                         lp2 = block[k][-1]
 
-                        if ros_utils.calcDistance(sp1.rect, lp2.rect) < self.thresh_merge:
+                        if (
+                            ros_utils.calcDistance(sp1.rect, lp2.rect)
+                            < self.thresh_merge
+                        ):
                             if sp1.polar[1] < lp2.polar[1]:
                                 obstacles[j].extend(block[k])
                             else:
@@ -484,7 +514,10 @@ class ClusteredAPF(BasicAPF):
                             inserted.append(k)
                             sp1 = obstacles[j][0]
                             lp1 = obstacles[j][-1]
-                        elif ros_utils.calcDistance(lp1.rect, sp2.rect) < self.thresh_merge:
+                        elif (
+                            ros_utils.calcDistance(lp1.rect, sp2.rect)
+                            < self.thresh_merge
+                        ):
                             if lp1.polar[1] < sp2.polar[1]:
                                 block[k].extend(obstacles[j])
                                 obstacles[j] = block[k][:]
@@ -546,7 +579,9 @@ class ClusteredAPF(BasicAPF):
             for i in range(0, self.num_obstacles):
                 # rospy.loginfo("calculating %d of %d", i + 1, self.n_detected_obstacles)
                 obstacle = obstacles[i]
-                uo_i, rep_i = self.CalcRepulsiveForce(obstacle.closest_point, self.pf_distance)
+                uo_i, rep_i = self.CalcRepulsiveForce(
+                    obstacle.closest_point, self.pf_distance
+                )
                 uo_.append(uo_i)
                 rep_.append(rep_i)
                 marker = Marker()
@@ -558,7 +593,9 @@ class ClusteredAPF(BasicAPF):
                 marker.scale.x = 0.1 * rep_i
                 marker.scale.y, marker.scale.z = 0.03, 0.03
                 marker.pose.position = Point(0, 0, 0)
-                marker.pose.orientation = ros_utils.calcOrientation([0, 0, 0], [uo_i[0], uo_i[1], 0])
+                marker.pose.orientation = ros_utils.calcOrientation(
+                    [0, 0, 0], [uo_i[0], uo_i[1], 0]
+                )
                 marker.color.r, marker.color.g, marker.color.b = 0, 0, 1
                 marker.color.a = 0.7
                 markerArray.markers.append(marker)
@@ -598,7 +635,9 @@ class ClusteredAPF(BasicAPF):
         marker.scale.x = 0.1 * u
         marker.scale.y, marker.scale.z = 0.03, 0.03
         marker.pose.position = Point(0, 0, 0)
-        marker.pose.orientation = ros_utils.calcOrientation([0, 0, 0], [u_total[0], u_total[1], 0])
+        marker.pose.orientation = ros_utils.calcOrientation(
+            [0, 0, 0], [u_total[0], u_total[1], 0]
+        )
         marker.color.r, marker.color.g, marker.color.b = 0, 1, 0
         marker.color.a = 0.7
         markerArray.markers.append(marker)
@@ -626,7 +665,9 @@ class ClusteredAPF(BasicAPF):
         self.n_detected_obstacles = len(sorted_obstacles)
         self.num_obstacles = int(np.ceil(self.n_detected_obstacles * self.obst_ratio))
 
-        self.f_total, self.total = self.CalcPotentialField(g_transx, g_transy, sorted_obstacles, self.ld_dist_max)
+        self.f_total, self.total = self.CalcPotentialField(
+            g_transx, g_transy, sorted_obstacles, self.ld_dist_max
+        )
 
         self.CalcVelocity(
             self.f_total,
