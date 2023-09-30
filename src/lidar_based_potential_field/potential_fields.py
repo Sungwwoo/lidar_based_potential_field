@@ -167,7 +167,7 @@ class BasicAPF:
         marker.type = Marker.TEXT_VIEW_FACING
         marker.action = Marker.ADD
         marker.pose.position = Point(-1.0, 0, 0)
-        marker.text = "%.2f, %.2f" % (self.KP, self.ETA)
+        marker.text = "%.2f, %.2f \n %.2f, %.2f" % (self.KP, self.ETA, self.prev_linear_x, self.prev_angular_z)
         marker.scale.z = 0.5
         marker.color.r, marker.color.g, marker.color.b = 0, 0, 0
         marker.color.a = 1
@@ -183,7 +183,7 @@ class BasicAPF:
         marker.scale.x = 0.1 * self.att
         marker.scale.y, marker.scale.z = 0.03, 0.03
         marker.pose.position = Point(0, 0, 0)
-        marker.pose.orientation = ros_utils.calcOrientation([0, 0, 0], [gx, gy, 0])
+        marker.pose.orientation = ros_utils.calcOrientation([0, 0, 0], [self.f_att[0], self.f_att[1], 0])
         marker.color.r, marker.color.g, marker.color.b = 1, 0, 0
         marker.color.a = 0.7
         markerArray.markers.append(marker)
@@ -251,8 +251,8 @@ class BasicAPF:
             d = self.att_rho_o
         theta = np.arctan2(gx, gy)
         theta += self.att_offset
-        p_x = d * np.cos(theta)
-        p_y = d * np.sin(theta)
+        p_x = self.KP * d * np.sin(theta) / ratio
+        p_y = self.KP * d * np.cos(theta) / ratio
         return [p_x, p_y], self.KP * d
 
     def CalcRepulsiveForce(self, o, dist_max):
@@ -308,20 +308,22 @@ class BasicAPF:
                 twist.angular.z = self.vel_theta_max
 
         # target_lin = self.vel_x_max * ((1 - 1 / abs(u)) - self.linear_kp * abs(target_ang) / self.vel_theta_max)
-        target_lin = self.linear_kp * u
-        angular_ratio = 1.0 * abs(current_orientation) / (2 * np.pi)
-        if angular_ratio > 0.8:
-            angular_ratio = 0.8
-        target_lin *= 1 - angular_ratio
-        # target_lin = min(self.vel_x_max * (1 - angular_ratio), self.vel_x_max * ((1 - 1 / abs(u))))
 
-        twist.linear.x = target_lin
+        target_lin = self.linear_kp * u
 
         # Clip Velocity
-        if twist.linear.x < self.vel_x_min:
-            twist.linear.x = self.vel_x_min
-        elif twist.linear.x > self.vel_x_max:
-            twist.linear.x = self.vel_x_max
+        if target_lin < self.vel_x_min:
+            target_lin = self.vel_x_min
+        elif target_lin > self.vel_x_max:
+            target_lin = self.vel_x_max
+
+        # target_lin = min(self.vel_x_max * (1 - angular_ratio), self.vel_x_max * ((1 - 1 / abs(u))))
+        angular_ratio = 1.0 * abs(target_ang) / self.vel_theta_max
+
+        if angular_ratio > 0.9:
+            angular_ratio = 0.9
+
+        twist.linear.x = (1 - angular_ratio) * target_lin
 
         # Save current velocities
         self.prev_linear_x = twist.linear.x
@@ -542,7 +544,7 @@ class ClusteredAPF(BasicAPF):
         marker.scale.x = 0.1 * self.att
         marker.scale.y, marker.scale.z = 0.03, 0.03
         marker.pose.position = Point(0, 0, 0)
-        marker.pose.orientation = ros_utils.calcOrientation([0, 0, 0], [gx, gy, 0])
+        marker.pose.orientation = ros_utils.calcOrientation([0, 0, 0], [self.f_att[0], self.f_att[1], 0])
         marker.color.r, marker.color.g, marker.color.b = 1, 0, 0
         marker.color.a = 0.7
         markerArray.markers.append(marker)
@@ -567,7 +569,7 @@ class ClusteredAPF(BasicAPF):
                 marker.scale.y, marker.scale.z = 0.03, 0.03
                 marker.pose.position = Point(0, 0, 0)
                 marker.pose.orientation = ros_utils.calcOrientation([0, 0, 0], [uo_i[0], uo_i[1], 0])
-                marker.color.r, marker.color.g, marker.color.b = 0, 0, 1
+                marker.color.r, marker.color.g, marker.color.b = 1, 0, 1
                 marker.color.a = 0.7
                 markerArray.markers.append(marker)
 
@@ -578,19 +580,19 @@ class ClusteredAPF(BasicAPF):
                 self.f_rep[0] = self.f_rep[0] + uo_[i][0] * rep_[i] / sum_rep_
                 self.f_rep[1] = self.f_rep[1] + uo_[i][1] * rep_[i] / sum_rep_
         self.rep = np.hypot(self.f_rep[0], self.f_rep[1])
-        # marker = Marker()
-        # marker.header.frame_id = ld_link_name
-        # marker.ns = "repulsive_total"
-        # marker.id = 0
-        # marker.type = Marker.ARROW
-        # marker.action = Marker.ADD
-        # marker.scale.x = 0.1 * rep
-        # marker.scale.y, marker.scale.z = 0.03, 0.03
-        # marker.pose.position = Point(0, 0, 0)
-        # marker.pose.orientation = calcOrientation([0, 0, 0], [uo[0], uo[1], 0])
-        # marker.color.r, marker.color.g, marker.color.b = 0, 0, 1
-        # marker.color.a = 0.7
-        # markerArray.markers.append(marker)
+        marker = Marker()
+        marker.header.frame_id = self.ld_link_name
+        marker.ns = "repulsive_total"
+        marker.id = 0
+        marker.type = Marker.ARROW
+        marker.action = Marker.ADD
+        marker.scale.x = 0.1 * self.rep
+        marker.scale.y, marker.scale.z = 0.03, 0.03
+        marker.pose.position = Point(0, 0, 0)
+        marker.pose.orientation = ros_utils.calcOrientation([0, 0, 0], [self.f_rep[0], self.f_rep[1], 0])
+        marker.color.r, marker.color.g, marker.color.b = 0, 0, 1
+        marker.color.a = 0.7
+        markerArray.markers.append(marker)
 
         # # Total potential
         u_total = [self.f_att[0] + self.f_rep[0], self.f_att[1] + self.f_rep[1]]
