@@ -25,7 +25,7 @@ class BasicAPF:
 
         # Get node namespace
         ns = rospy.get_namespace()
-        if len(ns) < 1:
+        if ns == "/":
             self.ns = ""
         else:
             self.ns = ns[1 : len(ns)]
@@ -167,7 +167,12 @@ class BasicAPF:
         marker.type = Marker.TEXT_VIEW_FACING
         marker.action = Marker.ADD
         marker.pose.position = Point(-1.0, 0, 0)
-        marker.text = "%.2f, %.2f \n %.2f, %.2f" % (self.KP, self.ETA, self.prev_linear_x, self.prev_angular_z)
+        marker.text = "%.2f, %.2f \n %.2f, %.2f" % (
+            self.KP,
+            self.ETA,
+            self.prev_linear_x,
+            self.prev_angular_z,
+        )
         marker.scale.z = 0.5
         marker.color.r, marker.color.g, marker.color.b = 0, 0, 0
         marker.color.a = 1
@@ -183,7 +188,9 @@ class BasicAPF:
         marker.scale.x = 0.1 * self.att
         marker.scale.y, marker.scale.z = 0.03, 0.03
         marker.pose.position = Point(0, 0, 0)
-        marker.pose.orientation = ros_utils.calcOrientation([0, 0, 0], [self.f_att[0], self.f_att[1], 0])
+        marker.pose.orientation = ros_utils.calcOrientation(
+            [0, 0, 0], [self.f_att[0], self.f_att[1], 0]
+        )
         marker.color.r, marker.color.g, marker.color.b = 1, 0, 0
         marker.color.a = 0.7
         markerArray.markers.append(marker)
@@ -201,7 +208,9 @@ class BasicAPF:
             marker.scale.x = 0.1 * self.rep
             marker.scale.y, marker.scale.z = 0.03, 0.03
             marker.pose.position = Point(0, 0, 0)
-            marker.pose.orientation = ros_utils.calcOrientation([0, 0, 0], [self.f_rep[0], self.f_rep[1], 0])
+            marker.pose.orientation = ros_utils.calcOrientation(
+                [0, 0, 0], [self.f_rep[0], self.f_rep[1], 0]
+            )
             marker.color.r, marker.color.g, marker.color.b = 0, 0, 1
             marker.color.a = 0.7
             markerArray.markers.append(marker)
@@ -270,7 +279,9 @@ class BasicAPF:
         twist.linear.y, twist.linear.z = 0, 0
         twist.angular.x, twist.angular.y = 0, 0
 
-        current_orientation = ros_utils.calcOrientation([0, 0, 0], [u_total[0], u_total[1], 0], ret_deg=True)
+        current_orientation = ros_utils.calcOrientation(
+            [0, 0, 0], [u_total[0], u_total[1], 0], ret_deg=True
+        )
 
         # TODO
         if ros_utils.calcDistance([0, 0], u_total) < self.xy_goal_tol:
@@ -286,9 +297,9 @@ class BasicAPF:
             self.pub_cmd.publish(twist)
             return
 
-        target_ang = self.vel_theta_max * self.angular_kp * current_orientation / (2 * np.pi) - self.angular_kd * (
-            self.prev_orientation - current_orientation
-        )
+        target_ang = self.vel_theta_max * self.angular_kp * current_orientation / (
+            2 * np.pi
+        ) - self.angular_kd * (self.prev_orientation - current_orientation)
 
         self.prev_orientation = current_orientation
 
@@ -419,7 +430,9 @@ class BasicAPF:
 
         # [r_transx, r_transy], [r_rotx, r_roty, r_rotz, r_rotw] = GetRobotPose()
         [g_transx, g_transy], goal_orientation = self.GetGoalPose()
-        self.f_total, self.total = self.CalcPotentialField(g_transx, g_transy, min_dist_obstacle, self.ld_dist_max)
+        self.f_total, self.total = self.CalcPotentialField(
+            g_transx, g_transy, min_dist_obstacle, self.ld_dist_max
+        )
 
         self.CalcVelocity(
             self.f_total,
@@ -447,7 +460,10 @@ class ClusteredAPF(BasicAPF):
             if self.ld_dist_min <= dist < self.ld_dist_max:
                 point = Point2D()
                 point.Set_RTheta(dist, self.ld_angle_min + self.ld_angle_step * i)
-                seg = int((dist - self.ld_dist_min) // ((self.ld_dist_max - self.ld_dist_min) / self.n_dist_segment))
+                seg = int(
+                    (dist - self.ld_dist_min)
+                    // ((self.ld_dist_max - self.ld_dist_min) / self.n_dist_segment)
+                )
                 segmented_points[seg].append(point)
 
         return segmented_points
@@ -461,7 +477,10 @@ class ClusteredAPF(BasicAPF):
                 break
             for j in range(1, len(segment)):
                 temp.append(segment[j - 1])
-                if abs(segment[j].Get_Theta() - segment[j - 1].Get_Theta()) > self.thresh_cluster * self.ld_angle_step:
+                if (
+                    abs(segment[j].Get_Theta() - segment[j - 1].Get_Theta())
+                    > self.thresh_cluster * self.ld_angle_step
+                ):
                     unmerged[i].append(temp)
                     temp = []
                 else:
@@ -544,7 +563,9 @@ class ClusteredAPF(BasicAPF):
         marker.scale.x = 0.1 * self.att
         marker.scale.y, marker.scale.z = 0.03, 0.03
         marker.pose.position = Point(0, 0, 0)
-        marker.pose.orientation = ros_utils.calcOrientation([0, 0, 0], [self.f_att[0], self.f_att[1], 0])
+        marker.pose.orientation = ros_utils.calcOrientation(
+            [0, 0, 0], [self.f_att[0], self.f_att[1], 0]
+        )
         marker.color.r, marker.color.g, marker.color.b = 1, 0, 0
         marker.color.a = 0.7
         markerArray.markers.append(marker)
@@ -568,7 +589,9 @@ class ClusteredAPF(BasicAPF):
                 marker.scale.x = 0.1 * rep_i
                 marker.scale.y, marker.scale.z = 0.03, 0.03
                 marker.pose.position = Point(0, 0, 0)
-                marker.pose.orientation = ros_utils.calcOrientation([0, 0, 0], [uo_i[0], uo_i[1], 0])
+                marker.pose.orientation = ros_utils.calcOrientation(
+                    [0, 0, 0], [uo_i[0], uo_i[1], 0]
+                )
                 marker.color.r, marker.color.g, marker.color.b = 1, 0, 1
                 marker.color.a = 0.7
                 markerArray.markers.append(marker)
@@ -589,7 +612,9 @@ class ClusteredAPF(BasicAPF):
         marker.scale.x = 0.1 * self.rep
         marker.scale.y, marker.scale.z = 0.03, 0.03
         marker.pose.position = Point(0, 0, 0)
-        marker.pose.orientation = ros_utils.calcOrientation([0, 0, 0], [self.f_rep[0], self.f_rep[1], 0])
+        marker.pose.orientation = ros_utils.calcOrientation(
+            [0, 0, 0], [self.f_rep[0], self.f_rep[1], 0]
+        )
         marker.color.r, marker.color.g, marker.color.b = 0, 0, 1
         marker.color.a = 0.7
         markerArray.markers.append(marker)
@@ -636,7 +661,9 @@ class ClusteredAPF(BasicAPF):
         self.n_detected_obstacles = len(sorted_obstacles)
         self.num_obstacles = int(np.ceil(self.n_detected_obstacles * self.obst_ratio))
 
-        self.f_total, self.total = self.CalcPotentialField(g_transx, g_transy, sorted_obstacles, self.ld_dist_max)
+        self.f_total, self.total = self.CalcPotentialField(
+            g_transx, g_transy, sorted_obstacles, self.ld_dist_max
+        )
 
         self.CalcVelocity(
             self.f_total,
