@@ -329,7 +329,7 @@ class BasicAPF:
             target_lin = self.vel_x_max
 
         # target_lin = min(self.vel_x_max * (1 - angular_ratio), self.vel_x_max * ((1 - 1 / abs(u))))
-        angular_ratio = 1.0 * abs(target_ang) / self.vel_theta_max
+        angular_ratio = 1.2 * abs(target_ang) / self.vel_theta_max
 
         if angular_ratio > 0.9:
             angular_ratio = 0.9
@@ -447,10 +447,10 @@ class ClusteredAPF(BasicAPF):
         # Number of detected obstacles
         self.n_detected_obstacles = 0
 
-        self.obst_ratio = 1.0
+        self.obst_ratio = 0.5
 
         # Number of obstacles for repulsive force calculation
-        self.num_obstacles = 2
+        self.num_obstacles = 1
         return
 
     def Calc_Distance_Segment(self, obs_raw: list):
@@ -571,8 +571,10 @@ class ClusteredAPF(BasicAPF):
         markerArray.markers.append(marker)
 
         self.f_rep, self.rep = [0, 0], 0
-        if self.num_obstacles != 0:
+        if self.num_obstacles != 0 and len(obstacles) != 0:
             uo_, rep_ = [], []
+            # rospy.loginfo(str(self.num_obstacles))
+            # rospy.loginfo(str(len(obstacles)))
 
             for i in range(0, self.num_obstacles):
                 # rospy.loginfo("calculating %d of %d", i + 1, self.n_detected_obstacles)
@@ -596,12 +598,15 @@ class ClusteredAPF(BasicAPF):
                 marker.color.a = 0.7
                 markerArray.markers.append(marker)
 
-            sum_rep_ = np.sum(np.array(rep_))
+            if self.num_obstacles == 1:
+                self.f_rep = uo_i
+            else:
+                sum_rep_ = np.sum(np.array(rep_))
 
-            for i in range(0, len(uo_)):
-                # rospy.loginfo("calculating %d of %d", i+1, len(uo_))
-                self.f_rep[0] = self.f_rep[0] + uo_[i][0] * rep_[i] / sum_rep_
-                self.f_rep[1] = self.f_rep[1] + uo_[i][1] * rep_[i] / sum_rep_
+                for i in range(0, len(uo_)):
+                    # rospy.loginfo("calculating %d of %d", i+1, len(uo_))
+                    self.f_rep[0] = self.f_rep[0] + uo_[i][0] * rep_[i] / sum_rep_
+                    self.f_rep[1] = self.f_rep[1] + uo_[i][1] * rep_[i] / sum_rep_
         self.rep = np.hypot(self.f_rep[0], self.f_rep[1])
         marker = Marker()
         marker.header.frame_id = self.ld_link_name
@@ -660,6 +665,12 @@ class ClusteredAPF(BasicAPF):
         sorted_obstacles = self.get_obstacles_list(scan)
         self.n_detected_obstacles = len(sorted_obstacles)
         self.num_obstacles = int(np.ceil(self.n_detected_obstacles * self.obst_ratio))
+
+        # Identical to APF if 1
+        # self.num_obstacles = 3
+
+        if self.num_obstacles > self.n_detected_obstacles:
+            self.num_obstacles = self.n_detected_obstacles
 
         self.f_total, self.total = self.CalcPotentialField(
             g_transx, g_transy, sorted_obstacles, self.ld_dist_max
