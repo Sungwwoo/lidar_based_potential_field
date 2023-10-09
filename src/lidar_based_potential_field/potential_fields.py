@@ -5,6 +5,7 @@ from tf.transformations import quaternion_from_euler, euler_from_quaternion
 from sensor_msgs.msg import LaserScan, PointCloud2
 from visualization_msgs.msg import Marker, MarkerArray
 from geometry_msgs.msg import Twist, Pose, Quaternion, Point
+from tf2_geometry_msgs import PoseStamped
 import sensor_msgs.point_cloud2 as pc2
 import numpy as np
 import matplotlib.pyplot as plt
@@ -116,6 +117,26 @@ class BasicAPF:
         rospy.loginfo("APF Initialized")
         return
 
+    def convert_frame(self, pose: list):
+        pose_stamped = PoseStamped()
+        pose_stamped.header.frame_id = self.ld_link_name
+        pose_stamped.header.stamp = rospy.Time.now()
+
+        pose_stamped.pose.position.x = pose[0]
+        pose_stamped.pose.position.y = pose[1]
+        pose_stamped.pose.position.z = 0
+        pose_stamped.pose.orientation = Quaternion(0, 0, 0, 1)
+
+        try:
+            converted_pose = self.tfBuffer.transform(
+                pose_stamped, self.ns + "base_link", rospy.Duration(1)
+            )
+            return converted_pose.pose.position.x, converted_pose.pose.position.y
+        except:
+            rospy.logerr("Total force transform failed")
+            pass
+        return
+
     def initialize(self):
         return
 
@@ -216,12 +237,19 @@ class BasicAPF:
             markerArray.markers.append(marker)
 
         # Total potential
-        u_total = [self.f_att[0] + self.f_rep[0], self.f_att[1] + self.f_rep[1]]
+        u_total = [
+            self.f_att[0] + self.f_rep[0],
+            self.f_att[1] + self.f_rep[1],
+        ]
+
+        # Concerting to base_link frame
+        u_total = self.convert_frame(u_total)
+
         u = np.hypot(u_total[0], u_total[1])
 
         marker = Marker()
 
-        marker.header.frame_id = self.ld_link_name
+        marker.header.frame_id = self.ns + "base_link"
         marker.ns = "total"
         marker.id = 0
         marker.type = Marker.ARROW
@@ -274,7 +302,7 @@ class BasicAPF:
         d = np.hypot(f_x, f_y)
         return [f_x, f_y], d
 
-    def CalcVelocity(self, u_total, u, goal_orientation, min_dist):
+    def CalcVelocity(self, u_total, u, goal_orientation, relative_goal, min_dist):
         twist = Twist()
         twist.linear.y, twist.linear.z = 0, 0
         twist.angular.x, twist.angular.y = 0, 0
@@ -284,13 +312,14 @@ class BasicAPF:
         )
 
         # TODO
-        if ros_utils.calcDistance([0, 0], u_total) < self.xy_goal_tol:
+        if ros_utils.calcDistance([0, 0], relative_goal) < self.xy_goal_tol:
             twist.linear.x = 0.0
             if goal_orientation < -self.yaw_goal_tol:
                 twist.angular.z = -self.in_place_vel_theta
             elif goal_orientation > self.yaw_goal_tol:
                 twist.angular.z = self.in_place_vel_theta
             else:
+                rospy.loginfo("Goal Arrived!")
                 twist.angular.z = 0
             if self.check_potential:
                 return
@@ -300,8 +329,6 @@ class BasicAPF:
         target_ang = self.vel_theta_max * self.angular_kp * current_orientation / (
             2 * np.pi
         ) - self.angular_kd * (self.prev_orientation - current_orientation)
-
-        self.prev_orientation = current_orientation
 
         # TODO: Fix linear velocity equation
         # Generate velocities
@@ -317,7 +344,6 @@ class BasicAPF:
                 twist.angular.z = -self.vel_theta_max
             else:
                 twist.angular.z = self.vel_theta_max
-
         # target_lin = self.vel_x_max * ((1 - 1 / abs(u)) - self.linear_kp * abs(target_ang) / self.vel_theta_max)
 
         target_lin = self.linear_kp * u
@@ -333,6 +359,14 @@ class BasicAPF:
 
         if angular_ratio > 0.9:
             angular_ratio = 0.9
+
+        rospy.loginfo(
+            "Angular Difference: {:.2f}, {:.2f}".format(
+                current_orientation, self.prev_orientation - current_orientation
+            )
+        )
+
+        self.prev_orientation = current_orientation
 
         twist.linear.x = (1 - angular_ratio) * target_lin
 
@@ -624,13 +658,19 @@ class ClusteredAPF(BasicAPF):
         marker.color.a = 0.7
         markerArray.markers.append(marker)
 
-        # # Total potential
-        u_total = [self.f_att[0] + self.f_rep[0], self.f_att[1] + self.f_rep[1]]
+        # Total potential
+        u_total = [
+            self.f_att[0] + self.f_rep[0],
+            (self.f_att[1] + self.f_rep[1]),
+        ]
+
+        # Concerting to base_link frame
+        u_total = self.convert_frame(u_total)
         u = np.hypot(u_total[0], u_total[1])
 
         marker = Marker()
 
-        marker.header.frame_id = self.ld_link_name
+        marker.header.frame_id = self.ns + "base_link"
         marker.ns = "total"
         marker.id = 0
         marker.type = Marker.ARROW
@@ -659,7 +699,7 @@ class ClusteredAPF(BasicAPF):
     def cbScan(self, scan: LaserScan):
         if not self.is_running:
             return
-        # [r_transx, r_transy], [r_rotx, r_roty, r_rotz, r_rotw] = GetRobotPose()
+
         [g_transx, g_transy], goal_orientation = self.GetGoalPose()
 
         sorted_obstacles = self.get_obstacles_list(scan)
@@ -667,7 +707,7 @@ class ClusteredAPF(BasicAPF):
         self.num_obstacles = int(np.ceil(self.n_detected_obstacles * self.obst_ratio))
 
         # Identical to APF if 1
-        # self.num_obstacles = 3
+        self.num_obstacles = 3
 
         if self.num_obstacles > self.n_detected_obstacles:
             self.num_obstacles = self.n_detected_obstacles
@@ -680,5 +720,6 @@ class ClusteredAPF(BasicAPF):
             self.f_total,
             self.total,
             euler_from_quaternion(goal_orientation)[2],
+            [g_transx, g_transy],
             min(scan.ranges),
         )
