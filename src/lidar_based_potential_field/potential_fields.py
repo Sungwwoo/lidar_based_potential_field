@@ -167,7 +167,7 @@ class BasicAPF:
         return robotLocation, robotOrientation
 
     def GetGoalPose(self):
-        loc = ros_utils.GetTF(self.tfBuffer, self.ld_link_name, self.ns + "goal")
+        loc = ros_utils.GetTF(self.tfBuffer, self.ns + "base_link", self.ns + "goal")
 
         goalLocation = [loc.transform.translation.x, loc.transform.translation.y]
         goalOrientation = [
@@ -244,7 +244,6 @@ class BasicAPF:
 
         # Concerting to base_link frame
         u_total = self.convert_frame(u_total)
-
         u = np.hypot(u_total[0], u_total[1])
 
         marker = Marker()
@@ -321,6 +320,7 @@ class BasicAPF:
             else:
                 rospy.loginfo("Goal Arrived!")
                 twist.angular.z = 0
+                self.is_running = False
             if self.check_potential:
                 return
             self.pub_cmd.publish(twist)
@@ -360,11 +360,11 @@ class BasicAPF:
         if angular_ratio > 0.9:
             angular_ratio = 0.9
 
-        rospy.loginfo(
-            "Angular Difference: {:.2f}, {:.2f}".format(
-                current_orientation, self.prev_orientation - current_orientation
-            )
-        )
+        # rospy.loginfo(
+        #     "Angular Difference: {:.2f}, {:.2f}".format(
+        #         current_orientation, self.prev_orientation - current_orientation
+        #     )
+        # )
 
         self.prev_orientation = current_orientation
 
@@ -589,7 +589,7 @@ class ClusteredAPF(BasicAPF):
 
         marker = Marker()
         self.f_att, self.att = self.CalcAttractiveForce(gx, gy)
-        marker.header.frame_id = self.ld_link_name
+        marker.header.frame_id = self.ns + "base_link"
         marker.ns = "attractive"
         marker.id = 0
         marker.type = Marker.ARROW
@@ -641,9 +641,11 @@ class ClusteredAPF(BasicAPF):
                     # rospy.loginfo("calculating %d of %d", i+1, len(uo_))
                     self.f_rep[0] = self.f_rep[0] + uo_[i][0] * rep_[i] / sum_rep_
                     self.f_rep[1] = self.f_rep[1] + uo_[i][1] * rep_[i] / sum_rep_
+
+        self.f_rep = self.convert_frame(self.f_rep)
         self.rep = np.hypot(self.f_rep[0], self.f_rep[1])
         marker = Marker()
-        marker.header.frame_id = self.ld_link_name
+        marker.header.frame_id = self.ns + "base_link"
         marker.ns = "repulsive_total"
         marker.id = 0
         marker.type = Marker.ARROW
@@ -665,7 +667,7 @@ class ClusteredAPF(BasicAPF):
         ]
 
         # Concerting to base_link frame
-        u_total = self.convert_frame(u_total)
+        # u_total = self.convert_frame(u_total)
         u = np.hypot(u_total[0], u_total[1])
 
         marker = Marker()
@@ -707,7 +709,8 @@ class ClusteredAPF(BasicAPF):
         self.num_obstacles = int(np.ceil(self.n_detected_obstacles * self.obst_ratio))
 
         # Identical to APF if 1
-        self.num_obstacles = 3
+        if self.num_obstacles > 10:
+            self.num_obstacles = 10
 
         if self.num_obstacles > self.n_detected_obstacles:
             self.num_obstacles = self.n_detected_obstacles
